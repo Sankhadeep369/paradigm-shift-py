@@ -1,122 +1,72 @@
-MAJOR_TEMP_LIMITS = (0, 45)
-SOC_LIMITS = (20, 80)
-CHARGE_RATE_LIMIT = 0.8
-TOLERANCE_PERCENTAGE = 0.05
+BATTERY_LIMITS = {
+    "temperature": {
+        "critical_lower": 0,
+        "critical_upper": 45,
+        "warning_lower": None,
+        "warning_upper": None,
+    },
+    "soc": {
+        "critical_lower": 20,
+        "critical_upper": 80,
+        "warning_lower": 19,
+        "warning_upper": 76,
+    },
+    "charge_rate": {
+        "critical_upper": 0.8,
+        "warning_upper": None,  # No early warning for charge rate
+    },
+}
 
 
-def check_temperature_limits(temperature):
-    """Check temperature for critical limits."""
-    if temperature < MAJOR_TEMP_LIMITS[0]:
-        return False, 'Temperature is too low!'
-    if temperature > MAJOR_TEMP_LIMITS[1]:
-        return False, 'Temperature is too high!'
-    return True, ''
+def calculate_warning_thresholds(critical_limit):
+    """Calculates the warning threshold based on the critical limit."""
+    return critical_limit * 0.95 if critical_limit else None
 
 
-def check_soc_limits(soc):
-    """Check State of Charge (SoC) for critical limits."""
-    if soc < SOC_LIMITS[0]:
-        return False, 'State of Charge is too low!'
-    if soc > SOC_LIMITS[1]:
-        return False, 'State of Charge is too high!'
-    return True, ''
+def battery_is_ok(temperature, soc, charge_rate, reporter=print):
 
+    for parameter, limits in BATTERY_LIMITS.items():
+        critical_lower = limits.get("critical_lower")
+        critical_upper = limits.get("critical_upper")
+        warning_lower = calculate_warning_thresholds(critical_lower)
+        warning_upper = calculate_warning_thresholds(critical_upper)
 
-def check_charge_rate_limits(charge_rate):
-    """Check charge rate for critical limits."""
-    if charge_rate > CHARGE_RATE_LIMIT:
-        return False, 'Charge rate is too high!'
-    return True, ''
+        if critical_lower and temperature < critical_lower:
+            reporter(f"Temperature is too low! ({temperature}°C)")
+            return False
+        elif critical_upper and temperature > critical_upper:
+            reporter(f"Temperature is too high! ({temperature}°C)")
+            return False
 
+        if warning_lower and soc < warning_lower:
+            reporter(f"Warning: Approaching discharge ({soc}%)")
+        elif warning_upper and soc > warning_upper:
+            reporter(f"Warning: Approaching charge-peak ({soc}%)")
 
-def check_temperature_warnings(temperature):
-    """Check temperature for warning levels."""
-    tolerance = MAJOR_TEMP_LIMITS[1] * TOLERANCE_PERCENTAGE
-    if MAJOR_TEMP_LIMITS[0] <= temperature < MAJOR_TEMP_LIMITS[0] + tolerance:
-        return 'Warning: Approaching low temperature'
-    if MAJOR_TEMP_LIMITS[1] - tolerance <= temperature <= MAJOR_TEMP_LIMITS[1]:
-        return 'Warning: Approaching high temperature'
-    return None
+        if critical_upper and soc > critical_upper:
+            reporter(f"State of Charge is too high! ({soc}%)")
+            return False
 
+        if critical_lower and soc < critical_lower:
+            reporter(f"State of Charge is too low! ({soc}%)")
+            return False
 
-def check_soc_warnings(soc):
-    """Check State of Charge (SoC) for warning levels."""
-    tolerance = SOC_LIMITS[1] * TOLERANCE_PERCENTAGE
-    if SOC_LIMITS[0] <= soc < SOC_LIMITS[0] + tolerance:
-        return 'Warning: Approaching discharge'
-    if SOC_LIMITS[1] - tolerance <= soc <= SOC_LIMITS[1]:
-        return 'Warning: Approaching charge-peak'
-    return None
+        if critical_upper and charge_rate > critical_upper:
+            reporter(f"Charge rate is too high! ({charge_rate})")
+            return False
 
-
-def check_charge_rate_warnings(charge_rate):
-    """Check charge rate for warning levels."""
-    tolerance = CHARGE_RATE_LIMIT * TOLERANCE_PERCENTAGE
-    if CHARGE_RATE_LIMIT - tolerance <= charge_rate <= CHARGE_RATE_LIMIT:
-        return 'Warning: Approaching charge-rate limit'
-    return None
-
-
-def battery_is_ok(temperature, soc, charge_rate, warnings_enabled=None):
-    """Check battery limits and warnings."""
-    warnings_enabled = warnings_enabled or {'temperature': True, 'soc': True, 'charge_rate': True}
-    # Critical checks
-    temp_ok, temp_message = check_temperature_limits(temperature)
-    if not temp_ok:
-        return False, temp_message
-    
-    soc_ok, soc_message = check_soc_limits(soc)
-    if not soc_ok:
-        return False, soc_message
-
-    charge_rate_ok, charge_rate_message = check_charge_rate_limits(charge_rate)
-    if not charge_rate_ok:
-        return False, charge_rate_message
-    
-    # Warning checks
-    warning_messages = []
-    if warnings_enabled.get('temperature', True):
-        temp_warning = check_temperature_warnings(temperature)
-        if temp_warning:
-            warning_messages.append(temp_warning)
-    
-    if warnings_enabled.get('soc', True):
-        soc_warning = check_soc_warnings(soc)
-        if soc_warning:
-            warning_messages.append(soc_warning)
-    
-    if warnings_enabled.get('charge_rate', True):
-        charge_rate_warning = check_charge_rate_warnings(charge_rate)
-        if charge_rate_warning:
-            warning_messages.append(charge_rate_warning)
-    
-    return True, warning_messages
-
-
-# To keep the purity of the function, the printing and reporting happens outside the core logic.
-def handle_battery_check(temperature, soc, charge_rate, reporter=print, warnings_enabled=None):
-    is_ok, messages = battery_is_ok(temperature, soc, charge_rate, warnings_enabled)
-    if not is_ok:
-        reporter(messages)  # Directly report failure message
-        return False
-    if messages:
-        for msg in messages:
-            reporter(msg)  # Report warnings
     return True
 
+
 def custom_reporter(message):
-    print(f'[ALERT] {message}')
+    """Prints messages with an alert prefix."""
+    print(f"[ALERT] {message}")
 
 
-# Tests to validate
-if __name__ == '__main__':
-    assert(handle_battery_check(25, 70, 0.7) is True)
-    assert(handle_battery_check(50, 85, 0) is False)
-    assert(handle_battery_check(-5, 70, 0.7) is False)
-    assert(handle_battery_check(25, 15, 0.7) is False)
-    assert(handle_battery_check(25, 70, 0.9) is False) 
-    assert(handle_battery_check(50, 70, 0.7, custom_reporter) is False)
-
-    # Custom test with warnings disabled for temperature
-    warnings_config = {'temperature': False, 'soc': True, 'charge_rate': True}
-    handle_battery_check(44, 78, 0.78, reporter=custom_reporter, warnings_enabled=warnings_config)
+if __name__ == "__main__":
+    assert battery_is_ok(25, 70, 0.7) is True
+    assert battery_is_ok(50, 85, 0) is False
+    assert battery_is_ok(-5, 70, 0.7) is False
+    assert battery_is_ok(25, 15, 0.7) is False
+    assert battery_is_ok(25, 70, 0.9) is False
+    assert battery_is_ok(50, 70, 0.7, custom_reporter) is False
