@@ -23,52 +23,59 @@ def calculate_warning_thresholds(critical_limit):
     return critical_limit * 0.95 if critical_limit else None
 
 
-def report_critical(parameter, value, critical_lower, critical_upper, reporter):
-    """Handles reporting of critical limit violations."""
-    if critical_lower and value < critical_lower:
+def is_below_critical(value, lower_limit):
+    return lower_limit is not None and value < lower_limit
+
+
+def is_above_critical(value, upper_limit):
+    return upper_limit is not None and value > upper_limit
+
+
+def report_critical_breach(parameter, value, lower_limit, upper_limit, reporter):
+    """Handles critical breach reporting."""
+    if is_below_critical(value, lower_limit):
         reporter(f"{parameter} is too low! ({value})")
         return False
-    if critical_upper and value > critical_upper:
+    if is_above_critical(value, upper_limit):
         reporter(f"{parameter} is too high! ({value})")
         return False
     return True
 
 
-def report_warning(parameter, value, warning_lower, warning_upper, reporter, lower_message, upper_message):
-    """Handles reporting of warnings within specified limits."""
-    if warning_lower and value < warning_lower:
+def report_warning_breach(parameter, value, lower_limit, upper_limit, reporter, lower_message, upper_message):
+    """Handles warning breach reporting."""
+    if lower_limit is not None and value < lower_limit:
         reporter(lower_message)
-    if warning_upper and value > warning_upper:
+    if upper_limit is not None and value > upper_limit:
         reporter(upper_message)
 
 
 def check_temperature(temperature, reporter):
     limits = BATTERY_LIMITS["temperature"]
-    return report_critical("Temperature", temperature, limits["critical_lower"], limits["critical_upper"], reporter)
+    return report_critical_breach("Temperature", temperature, limits["critical_lower"], limits["critical_upper"], reporter)
 
 
 def check_soc(soc, reporter):
     limits = BATTERY_LIMITS["soc"]
-    report_warning("SoC", soc, limits["warning_lower"], limits["warning_upper"], reporter, 
-                   f"Warning: Approaching discharge ({soc}%)", 
-                   f"Warning: Approaching charge-peak ({soc}%)")
-    return report_critical("State of Charge", soc, limits["critical_lower"], limits["critical_upper"], reporter)
+    report_warning_breach("SoC", soc, limits["warning_lower"], limits["warning_upper"], reporter,
+                          f"Warning: Approaching discharge ({soc}%)",
+                          f"Warning: Approaching charge-peak ({soc}%)")
+    return report_critical_breach("State of Charge", soc, limits["critical_lower"], limits["critical_upper"], reporter)
 
 
 def check_charge_rate(charge_rate, reporter):
     critical_upper = BATTERY_LIMITS["charge_rate"]["critical_upper"]
-    return report_critical("Charge rate", charge_rate, None, critical_upper, reporter)
+    return report_critical_breach("Charge rate", charge_rate, None, critical_upper, reporter)
 
 
 def battery_is_ok(temperature, soc, charge_rate, reporter=print):
-    if not check_temperature(temperature, reporter):
-        return False
-    if not check_soc(soc, reporter):
-        return False
-    if not check_charge_rate(charge_rate, reporter):
-        return False
-
-    return True
+    """Orchestrates the checks for all parameters and returns the final status."""
+    checks = [
+        check_temperature(temperature, reporter),
+        check_soc(soc, reporter),
+        check_charge_rate(charge_rate, reporter),
+    ]
+    return all(checks)
 
 
 def custom_reporter(message):
