@@ -42,12 +42,22 @@ def report_critical_breach(parameter, value, lower_limit, upper_limit, reporter)
     return True
 
 
-def report_warning_breach(parameter, value, lower_limit, upper_limit, reporter, lower_message, upper_message):
+def report_lower_warning(parameter, value, warning_lower, reporter, message):
+    """Handles lower warning reporting."""
+    if warning_lower is not None and value < warning_lower:
+        reporter(message)
+
+
+def report_upper_warning(parameter, value, warning_upper, reporter, message):
+    """Handles upper warning reporting."""
+    if warning_upper is not None and value > warning_upper:
+        reporter(message)
+
+
+def report_warning_breach(parameter, value, warning_lower, warning_upper, reporter, lower_message, upper_message):
     """Handles warning breach reporting."""
-    if lower_limit is not None and value < lower_limit:
-        reporter(lower_message)
-    if upper_limit is not None and value > upper_limit:
-        reporter(upper_message)
+    report_lower_warning(parameter, value, warning_lower, reporter, lower_message)
+    report_upper_warning(parameter, value, warning_upper, reporter, upper_message)
 
 
 def check_temperature(temperature, reporter):
