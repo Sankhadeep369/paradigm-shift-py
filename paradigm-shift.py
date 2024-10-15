@@ -23,47 +23,41 @@ def calculate_warning_thresholds(critical_limit):
     return critical_limit * 0.95 if critical_limit else None
 
 
-def check_temperature(temperature, reporter):
-    limits = BATTERY_LIMITS["temperature"]
-    critical_lower = limits["critical_lower"]
-    critical_upper = limits["critical_upper"]
-
-    if temperature < critical_lower:
-        reporter(f"Temperature is too low! ({temperature}°C)")
+def report_critical(parameter, value, critical_lower, critical_upper, reporter):
+    """Handles reporting of critical limit violations."""
+    if critical_lower and value < critical_lower:
+        reporter(f"{parameter} is too low! ({value})")
         return False
-    if temperature > critical_upper:
-        reporter(f"Temperature is too high! ({temperature}°C)")
+    if critical_upper and value > critical_upper:
+        reporter(f"{parameter} is too high! ({value})")
         return False
     return True
+
+
+def report_warning(parameter, value, warning_lower, warning_upper, reporter, lower_message, upper_message):
+    """Handles reporting of warnings within specified limits."""
+    if warning_lower and value < warning_lower:
+        reporter(lower_message)
+    if warning_upper and value > warning_upper:
+        reporter(upper_message)
+
+
+def check_temperature(temperature, reporter):
+    limits = BATTERY_LIMITS["temperature"]
+    return report_critical("Temperature", temperature, limits["critical_lower"], limits["critical_upper"], reporter)
 
 
 def check_soc(soc, reporter):
     limits = BATTERY_LIMITS["soc"]
-    critical_lower = limits["critical_lower"]
-    critical_upper = limits["critical_upper"]
-    warning_lower = limits["warning_lower"]
-    warning_upper = limits["warning_upper"]
-
-    if soc < critical_lower:
-        reporter(f"State of Charge is too low! ({soc}%)")
-        return False
-    if soc > critical_upper:
-        reporter(f"State of Charge is too high! ({soc}%)")
-        return False
-    if soc < warning_lower:
-        reporter(f"Warning: Approaching discharge ({soc}%)")
-    if soc > warning_upper:
-        reporter(f"Warning: Approaching charge-peak ({soc}%)")
-    return True
+    report_warning("SoC", soc, limits["warning_lower"], limits["warning_upper"], reporter, 
+                   f"Warning: Approaching discharge ({soc}%)", 
+                   f"Warning: Approaching charge-peak ({soc}%)")
+    return report_critical("State of Charge", soc, limits["critical_lower"], limits["critical_upper"], reporter)
 
 
 def check_charge_rate(charge_rate, reporter):
     critical_upper = BATTERY_LIMITS["charge_rate"]["critical_upper"]
-
-    if charge_rate > critical_upper:
-        reporter(f"Charge rate is too high! ({charge_rate})")
-        return False
-    return True
+    return report_critical("Charge rate", charge_rate, None, critical_upper, reporter)
 
 
 def battery_is_ok(temperature, soc, charge_rate, reporter=print):
